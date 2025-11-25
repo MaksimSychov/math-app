@@ -1,0 +1,81 @@
+name: Java CI/CD
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        java: [17, 21]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Установка Java
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ matrix.java }}
+        distribution: 'temurin'
+    
+    - name: Запуск тестов
+      run: mvn test
+
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Установка Java
+      uses: actions/setup-java@v4
+      with:
+        java-version: 17
+        distribution: 'temurin'
+    
+    - name: Сборка проекта
+      run: mvn clean compile
+    
+    - name: Создание JAR
+      run: mvn package -DskipTests
+    
+    - name: Проверка сборки
+      run: |
+        echo "Проверяем собранные файлы:"
+        ls -la target/
+        echo "Запускаем приложение:"
+        java -cp target/math-app-1.0.jar MathOperations
+    
+    - name: Сохранение артефакта
+      uses: actions/upload-artifact@v4
+      with:
+        name: math-app
+        path: target/math-app-1.0.jar
+
+  release:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Загрузка артефакта
+      uses: actions/download-artifact@v4
+      with:
+        name: math-app
+    
+    - name: Создание релиза
+      uses: softprops/action-gh-release@v1
+      with:
+        files: math-app-1.0.jar
+        tag_name: v1.0.${{ github.run_number }}
+        name: Релиз v1.0.${{ github.run_number }}
+        body: |
+          Автоматический релиз Math Application
+          - Сборка: ${{ github.sha }}
+          - Дата: ${{ github.event.head_commit.timestamp }}
+          - Тесты: ✅ Успешно пройдены
+          - Платформы: ✅ Протестировано на Linux, Windows, macOS
